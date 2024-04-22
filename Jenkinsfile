@@ -1,13 +1,15 @@
 pipeline {
     agent any
-     environment {
+
+    environment {
         DOCKER_CREDENTIALS_ID = 'roseaw-dockerhub'
         DOCKER_IMAGE = 'cithit/backstage'
-        IMAGE_TAG = "build-${BUILD_NUMBER}"
+        IMAGE_TAG = "build-${env.BUILD_NUMBER}"
         GITHUB_URL = 'https://github.com/WTaylor8miami/backstage-deploy.git'
         KUBECONFIG = credentials('taylorw8-225')
-        }
- stages {
+    }
+
+    stages {
         stage('Checkout') {
             steps {
                 checkout([$class: 'GitSCM', branches: [[name: '*/main']],
@@ -31,7 +33,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}")
+                    docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}").inside {
+                        sh 'yarn build'
+                    }
                 }
             }
         }
@@ -49,7 +53,6 @@ pipeline {
         stage('Deploy to Dev Environment') {
             steps {
                 script {
-                    // Apply the Kubernetes YAML configurations for the development environment
                     sh "kubectl apply -f k8s/deployment-dev.yaml --record"
                 }
             }
@@ -58,7 +61,6 @@ pipeline {
         stage('Run Backstage Tests') {
             steps {
                 script {
-                    // Run Backstage-specific tests, potentially using Selenium or other integration test frameworks
                     docker.image("${DOCKER_IMAGE}:${IMAGE_TAG}").inside {
                         sh "yarn test:integration"
                     }
@@ -72,7 +74,6 @@ pipeline {
             }
             steps {
                 script {
-                    // Apply the Kubernetes YAML configurations for the production environment
                     sh "kubectl apply -f k8s/deployment-prod.yaml --record"
                 }
             }
@@ -86,3 +87,12 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            cleanWs()
+            // Include notifications here if required, e.g., Slack or email notifications.
+        }
+    }
+}
+
